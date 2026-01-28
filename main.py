@@ -1,13 +1,12 @@
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
-import base64
+import requests # You will need to pip install requests
 
 app = FastAPI()
 
 class VoiceRequest(BaseModel):
-    language: str
-    audio_format: str
-    audio_base64: str
+    # The tester sends 'audio_url' and 'message'
+    audio_url: str 
     message: str
 
 @app.get("/")
@@ -15,18 +14,22 @@ def home():
     return {"status": "API is online"}
 
 @app.post("/detect")
-async def detect_voice(data: VoiceRequest, x_api_key: str = Header(None)):
-    # Verify the API key you will use in the tester
-    if x_api_key != "my_secret_key_123":
+async def detect_voice(data: VoiceRequest, authorization: str = Header(None)):
+    # 1. Verify API Key (Matches the 'Authorization' header in the tester)
+    if authorization != "my_secret_key_123":
         raise HTTPException(status_code=401, detail="Invalid API Key")
 
-    # Decode the audio (this is where you'd send 'audio_bytes' to your ML model)
+    # 2. Download the audio file from the provided GitHub URL
     try:
-        audio_bytes = base64.b64decode(data.audio_base64)
-    except:
-        raise HTTPException(status_code=400, detail="Invalid Base64")
+        response = requests.get(data.audio_url)
+        if response.status_code != 200:
+            raise HTTPException(status_code=400, detail="Could not download audio from URL")
+        
+        audio_bytes = response.content # This is what you pass to your ML model
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Download failed: {str(e)}")
 
-    # Sample response for the tester
+    # 3. Sample response (Matches what the tester expects)
     return {
         "is_ai_generated": False,
         "confidence": 0.99,
